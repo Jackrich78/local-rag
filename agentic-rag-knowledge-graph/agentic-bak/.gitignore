@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+local-RAG-agent/
+.DS_Store
+.env
+supabase
