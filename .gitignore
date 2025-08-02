@@ -12,3 +12,4 @@ infra/supabase
 secrets/
 .vscode
 .DS_Store
+* -bak/
