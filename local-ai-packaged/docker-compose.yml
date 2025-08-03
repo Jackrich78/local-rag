@@ -156,6 +156,7 @@ services:
       - SEARXNG_HOSTNAME=${SEARXNG_HOSTNAME:-":8006"}
       - LANGFUSE_HOSTNAME=${LANGFUSE_HOSTNAME:-":8007"}
       - NEO4J_HOSTNAME=${NEO4J_HOSTNAME:-":8008"}
+      - AGENT_HOSTNAME=${AGENT_HOSTNAME:-":8009"}
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-internal}
     cap_drop:
       - ALL
@@ -396,3 +397,59 @@ services:
     image: ollama/ollama:rocm
     depends_on:
      - ollama-gpu-amd
+
+  # Agentic RAG Knowledge Graph Agent
+  agent:
+    container_name: agentic-rag-agent
+    build:
+      context: ../agentic-rag-knowledge-graph
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - 8058/tcp
+    environment:
+      # Application config
+      - APP_ENV=production
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8058
+      - LOG_LEVEL=INFO
+      
+      # Database connection (container networking)
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      
+      # Neo4j connection (container networking)
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      
+      # LLM Provider (from environment)
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - LLM_API_KEY=${OPENAI_API_KEY}
+      - LLM_CHOICE=${LLM_CHOICE:-gpt-4o-mini}
+      
+      # Embedding Provider (from environment)
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      - EMBEDDING_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      
+      # Ingestion config
+      - INGESTION_LLM_CHOICE=${INGESTION_LLM_CHOICE:-gpt-4o-mini}
+    
+    volumes:
+      # Mount test documents for ingestion
+      - ../agentic-rag-knowledge-graph/test_docs:/app/test_docs:ro
+      - ../agentic-rag-knowledge-graph/big_tech_docs:/app/big_tech_docs:ro
+    
+    depends_on:
+      neo4j:
+        condition: service_started
+      # Note: supabase-db is in included compose file, so we reference by service name
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8058/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
