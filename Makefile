@@ -54,16 +54,26 @@ health: ## Check health of all services
 	@echo "\n$(YELLOW)Supabase Health:$(RESET)"
 	@curl -s http://localhost:8005/health 2>/dev/null && echo "✅ Supabase OK" || echo "❌ Supabase not responding"
 
+seed: ## Run document ingestion
+	@echo "$(GREEN)Running document ingestion...$(RESET)"
+	cd local-ai-packaged && docker-compose --profile init up agent-init
+	@echo "$(GREEN)Document ingestion completed$(RESET)"
+
 test: build up ## Build, start services, and run basic tests
-	@echo "$(GREEN)Running basic integration tests...$(RESET)"
-	@sleep 30  # Wait for services to start
-	@echo "$(YELLOW)Testing agent health...$(RESET)"
+	@echo "$(GREEN)Running Phase 3.1 integration tests...$(RESET)"
+	@sleep 60  # Wait for services to start (increased for database init)
+	@echo "$(YELLOW)Testing all service health checks...$(RESET)"
 	@curl -f http://localhost:8009/health > /dev/null 2>&1 && echo "✅ Agent health check passed" || echo "❌ Agent health check failed"
+	@curl -f http://localhost:8005/health > /dev/null 2>&1 && echo "✅ Supabase health check passed" || echo "❌ Supabase health check failed"
+	@echo "$(YELLOW)Testing database schema...$(RESET)"
+	@cd local-ai-packaged && docker-compose exec -T supabase-db psql -U postgres -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('documents', 'chunks', 'sessions', 'messages');" | grep -q "documents" && echo "✅ Database schema initialized" || echo "❌ Database schema missing"
 	@echo "$(YELLOW)Testing agent API...$(RESET)"
 	@curl -X POST http://localhost:8009/chat \
 		-H "Content-Type: application/json" \
 		-d '{"message": "Hello", "session_id": "test-session"}' \
 		> /dev/null 2>&1 && echo "✅ Agent API test passed" || echo "❌ Agent API test failed"
+	@echo "$(YELLOW)Testing CLI functionality...$(RESET)"
+	@cd local-ai-packaged && docker-compose exec -T agent python -c "from agent.cli import main; print('✅ CLI import test passed')" 2>/dev/null || echo "❌ CLI import test failed"
 
 clean: down ## Stop services and remove containers/volumes
 	@echo "$(RED)Cleaning up containers and volumes...$(RESET)"
@@ -93,3 +103,30 @@ shell-neo4j: ## Open Neo4j shell
 ingest: ## Run document ingestion in agent container
 	@echo "$(GREEN)Running document ingestion...$(RESET)"
 	cd local-ai-packaged && docker-compose exec agent python -m ingestion.ingest --documents test_docs --clean --verbose
+
+# Phase 3.2 Targets
+test-phase32: ## Run Phase 3.2 acceptance tests
+	@echo "$(GREEN)Running Phase 3.2 acceptance tests...$(RESET)"
+	@python3 test_phase32.py
+
+health-phase32: ## Check Phase 3.2 health status
+	@echo "$(GREEN)Phase 3.2 Health Check:$(RESET)"
+	@echo "$(YELLOW)OpenAI Models Endpoint:$(RESET)"
+	@curl -s http://localhost:8009/v1/models | python3 -m json.tool 2>/dev/null || echo "❌ Models endpoint not responding"
+	@echo "\n$(YELLOW)OpenWebUI Status:$(RESET)"
+	@curl -s http://localhost:8002 -o /dev/null && echo "✅ OpenWebUI accessible" || echo "❌ OpenWebUI not responding"
+	@echo "\n$(YELLOW)Supabase Studio (Direct):$(RESET)"
+	@curl -s http://localhost:8005 -o /dev/null && echo "✅ Supabase Studio accessible" || echo "❌ Supabase Studio not responding"
+	@echo "\n$(YELLOW)Kong Containers:$(RESET)"
+	@docker ps --format "{{.Names}}" | grep -i kong && echo "❌ Kong containers still running" || echo "✅ No Kong containers found"
+	@echo "\n$(YELLOW)Agent Health:$(RESET)"
+	@curl -s http://localhost:8009/health | python3 -m json.tool 2>/dev/null || echo "❌ Agent health check failed"
+
+validate-phase32: up ## Full Phase 3.2 validation
+	@echo "$(GREEN)Validating Phase 3.2 implementation...$(RESET)"
+	@sleep 30  # Wait for services to start
+	@echo "$(YELLOW)Running health checks...$(RESET)"
+	@make health-phase32
+	@echo "\n$(YELLOW)Running acceptance tests...$(RESET)"
+	@make test-phase32
+	@echo "\n$(GREEN)Phase 3.2 validation complete!$(RESET)"

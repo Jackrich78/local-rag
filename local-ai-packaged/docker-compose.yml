@@ -80,6 +80,17 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - open-webui:/app/backend/data
+    environment:
+      # Configure OpenWebUI to use our agent as backend
+      - OPENAI_API_BASE_URL=http://agent:8058/v1
+      - OPENAI_API_KEY=dummy
+      - ENABLE_OPENAI_API=true
+      - DEFAULT_MODELS=gpt-4o-mini
+      - WEBUI_AUTH=false
+      - ENABLE_SIGNUP=true
+    depends_on:
+      agent:
+        condition: service_healthy
 
   n8n-import:
     <<: *service-n8n
@@ -117,6 +128,9 @@ services:
 
   neo4j:
     image: neo4j:latest
+    ports:
+      - "7474:7474/tcp"  # HTTP interface
+      - "7687:7687/tcp"  # Bolt protocol
     volumes:
         - ./neo4j/logs:/logs
         - ./neo4j/config:/config
@@ -137,6 +151,13 @@ services:
     ports:
       - 80:80/tcp
       - 443:443/tcp
+      - 8001:8001/tcp  # N8N
+      - 8002:8002/tcp  # WebUI
+      - 8003:8003/tcp  # Flowise
+      - 8005:8005/tcp  # Supabase
+      - 8007:8007/tcp  # Langfuse
+      - 8008:8008/tcp  # Neo4j
+      - 8009:8009/tcp  # Agent
     expose:
       - 2019/tcp
       - 443/tcp
@@ -420,7 +441,7 @@ services:
       # Neo4j connection (container networking)
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-G?kZt?7[LC{Ym3tI}YKfEk}
       
       # LLM Provider (from environment)
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
@@ -445,7 +466,8 @@ services:
     depends_on:
       neo4j:
         condition: service_started
-      # Note: supabase-db is in included compose file, so we reference by service name
+      db:
+        condition: service_healthy
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8058/health"]
@@ -453,3 +475,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # Document ingestion automation
+  agent-init:
+    container_name: agentic-rag-init
+    build:
+      context: ../agentic-rag-knowledge-graph
+      dockerfile: Dockerfile
+    profiles: ["init"]
+    environment:
+      # Same environment as agent
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-G?kZt?7[LC{Ym3tI}YKfEk}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - LLM_API_KEY=${OPENAI_API_KEY}
+      - LLM_CHOICE=${LLM_CHOICE:-gpt-4o-mini}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      - EMBEDDING_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - INGESTION_LLM_CHOICE=${INGESTION_LLM_CHOICE:-gpt-4o-mini}
+    
+    volumes:
+      - ../agentic-rag-knowledge-graph/test_docs:/app/test_docs:ro
+      - ../agentic-rag-knowledge-graph/big_tech_docs:/app/big_tech_docs:ro
+    
+    depends_on:
+      agent:
+        condition: service_healthy
+    
+    command: ["python", "-m", "ingestion.ingest", "--documents", "big_tech_docs", "--clean", "--verbose"]
