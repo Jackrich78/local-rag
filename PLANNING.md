@@ -175,3 +175,162 @@ Add **pre‑commit hook**: blocks commits containing `sk-` or `neo4j/` patterns.
 | 4 | Do we need a dedicated compose file inside `agentic-rag-knowledge-graph`? | Provide optional override `docker-compose.arkg.yml`; keep root compose as single source of truth |
 
 ---
+
+# Product Requirement Document — **Phase 3.2 User Experience & CLI Enhancement**
+
+*Revision date: 2025‑08‑03*
+
+---
+
+## 1 Summary
+Phase 3.1 delivered basic CLI functionality focused on testing and infrastructure. **Phase 3.2** elevates the CLI to a first-class user interface by creating an interactive, developer-friendly experience that makes the agentic RAG system as easy to use as familiar tools like `git`, `docker`, or `kubectl`.
+
+Success is measured by developer adoption and reduced friction between thought and AI assistance.
+
+## 2 Goals & Success Metrics
+| Goal | Metric | Target |
+| --- | --- | --- |
+| Interactive conversation | `agent chat` maintains context | ≥ 10 turns |
+| Command discoverability | `agent --help` shows all features | 100% coverage |
+| Response formatting | Pretty output with sources/tools | readable |
+| Session persistence | Conversation survives restarts | 100% |
+| Zero-configuration | Works immediately after `make up` | 0 setup steps |
+
+## 3 User Experience Philosophy
+
+### Interaction Paradigms
+1. **API-First**: HTTP endpoints for integration (Phase 3.1 ✅)
+2. **CLI-Native**: Terminal-based for developers (Phase 3.2 🎯)
+3. **Container-Integrated**: Direct access to agent capabilities
+
+### CLI Design Principles
+- **Zero-configuration**: Works immediately after `make up`
+- **Context-aware**: Maintains conversation history
+- **Multi-modal**: Both interactive and single-command modes
+- **Transparent**: Shows sources, tools used, and reasoning
+- **Familiar**: Follows conventions from `git`, `docker`, `kubectl`
+
+## 4 Command Structure
+
+### Base Commands
+```bash
+agent chat                    # Interactive conversation mode
+agent ask "question"          # Single query mode
+agent ingest /path/to/docs    # Batch document ingestion
+agent status                  # System health and statistics
+agent history                 # Show recent conversations
+agent --help                  # Command discovery
+```
+
+### Interactive Mode Features
+```bash
+agent chat
+> Hello! What can you do?
+🤖 I can help you with...
+
+Sources: [doc1.pdf, knowledge_graph]
+Tools: [vector_search, graph_search]
+
+> What are Google's AI initiatives?
+🤖 Google has several key AI initiatives...
+
+> /sources     # Show last response sources
+> /tools       # Show tools used
+> /history     # Conversation history
+> /clear       # Clear context
+> /quit        # Exit gracefully
+```
+
+## 5 Technical Implementation
+
+### 5.1 CLI Module Structure
+```
+agentic-rag-knowledge-graph/agent/
+├── cli/
+│   ├── __init__.py
+│   ├── main.py          # Entry point, command routing
+│   ├── chat.py          # Interactive conversation handler
+│   ├── commands.py      # Single-command handlers
+│   ├── session.py       # Session management
+│   ├── formatting.py    # Pretty output, colors, tables
+│   └── config.py        # CLI-specific configuration
+```
+
+### 5.2 Session Management
+- **Local storage**: `~/.agent/sessions/` for conversation history
+- **Auto-resume**: Detect interrupted sessions
+- **Export capability**: Save conversations as markdown
+
+### 5.3 Output Formatting
+- **Rich text**: Colors, bold, tables using `rich` library
+- **Streaming**: Real-time response display for long queries
+- **Source attribution**: Clear citation formatting
+- **Tool transparency**: Show which tools were used and why
+
+## 6 Integration with Existing Infrastructure
+
+### 6.1 Container Integration
+```bash
+# From host (via Make targets)
+make chat                    # Launch interactive session
+make ask "question"          # Single query
+
+# Direct container access
+docker-compose exec agent agent chat
+docker-compose exec agent agent ask "question"
+```
+
+### 6.2 API Reuse
+- CLI calls existing FastAPI endpoints internally
+- No duplicate business logic
+- Consistent behavior between API and CLI
+- Leverages existing authentication and session management
+
+## 7 Developer Workflow Integration
+
+### 7.1 Context Switching
+- **Quick answers**: `agent ask "what is RAG?"` without leaving terminal
+- **Deep research**: `agent chat` for exploratory conversations
+- **Documentation**: `agent ask "how do I deploy this?"` for project-specific help
+
+### 7.2 Automation Friendly
+```bash
+# Scriptable single commands
+result=$(agent ask "summarize recent AI developments")
+echo "$result" | mail -s "AI Update" team@company.com
+
+# Batch processing
+find ./docs -name "*.pdf" | xargs -I {} agent ingest {}
+```
+
+## 8 Testing & Acceptance
+
+### 8.1 Automated Tests (extends Phase 3.1)
+| ID | Test | Pass Condition |
+| --- | --- | --- |
+| B1 | Interactive mode lifecycle | `agent chat` starts/stops cleanly |
+| B2 | Context preservation | Multi-turn conversation maintains context |
+| B3 | Output formatting | Rich formatting displays correctly |
+| B4 | Session persistence | History survives container restarts |
+| B5 | Error handling | Graceful degradation with helpful messages |
+
+### 8.2 User Experience Tests
+1. **First-time user**: Can discover commands via `--help`
+2. **Power user**: Can maintain 20+ turn conversations
+3. **Developer**: Can integrate with shell scripts and aliases
+4. **Researcher**: Can export conversation as shareable markdown
+
+## 9 Future Considerations (Phase 4+)
+
+### 9.1 Advanced Features
+- **Auto-completion**: Tab completion for commands and context
+- **Syntax highlighting**: Code examples and query formatting
+- **Plugin system**: Extensible command architecture
+- **Multi-session**: Parallel conversation contexts
+
+### 9.2 Integration Opportunities
+- **IDE plugins**: VS Code extension calling CLI backend
+- **Shell integration**: Bash/Zsh aliases and functions
+- **Workflow tools**: GitHub Actions, CI/CD integration
+
+---
