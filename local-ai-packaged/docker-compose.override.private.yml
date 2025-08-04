@@ -64,3 +64,18 @@ services:
   ollama-gpu-amd:
     ports:
       - 127.0.0.1:11434:11434
+
+  # Agent development configuration - enables live code reloading
+  agent:
+    ports:
+      - 127.0.0.1:8058:8058  # Direct access to agent for debugging
+    volumes:
+      # Mount source code for live development (overrides Dockerfile COPY)
+      - ../agentic-rag-knowledge-graph:/app:rw
+      # Exclude virtual environment to prevent conflicts
+      - /app/venv
+      - /app/__pycache__
+    environment:
+      # Enable development mode for faster startup and debugging
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG

@@ -71,7 +71,7 @@ services:
     entrypoint: /bin/sh -c "sleep 3; flowise start"
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:latest  # Use latest available version
     restart: unless-stopped
     container_name: open-webui
     expose:
@@ -81,13 +81,12 @@ services:
     volumes:
       - open-webui:/app/backend/data
     environment:
-      # Configure OpenWebUI to use our agent as backend
+      # Phase 1 OpenWebUI Configuration  
+      - ENABLE_PERSISTENT_CONFIG=false
       - OPENAI_API_BASE_URL=http://agent:8058/v1
-      - OPENAI_API_KEY=dummy
-      - ENABLE_OPENAI_API=true
-      - DEFAULT_MODELS=gpt-4o-mini
+      - OPENAI_API_KEY=local-dev-key
       - WEBUI_AUTH=false
-      - ENABLE_SIGNUP=true
+      - ENABLE_SIGNUP=false
     depends_on:
       agent:
         condition: service_healthy
@@ -429,6 +428,10 @@ services:
     expose:
       - 8058/tcp
     environment:
+      # Phase 1 Feature Flags
+      - MEMORY_ENABLED=false
+      - STREAMING_ENABLED=false
+      
       # Application config
       - APP_ENV=production
       - APP_HOST=0.0.0.0
@@ -436,9 +439,9 @@ services:
       - LOG_LEVEL=INFO
       
       # Database connection (container networking)
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       
-      # Neo4j connection (container networking)
+      # Neo4j connection (container networking)  
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-G?kZt?7[LC{Ym3tI}YKfEk}
@@ -466,7 +469,7 @@ services:
     depends_on:
       neo4j:
         condition: service_started
-      db:
+      db:  # Supabase database service
         condition: service_healthy
     
     healthcheck:
@@ -485,7 +488,7 @@ services:
     profiles: ["init"]
     environment:
       # Same environment as agent
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-G?kZt?7[LC{Ym3tI}YKfEk}
