@@ -83,10 +83,21 @@ services:
     environment:
       # Phase 1 OpenWebUI Configuration  
       - ENABLE_PERSISTENT_CONFIG=false
-      - OPENAI_API_BASE_URL=http://agent:8058/v1
-      - OPENAI_API_KEY=local-dev-key
       - WEBUI_AUTH=false
       - ENABLE_SIGNUP=false
+      
+      # Complete Ollama Disabling
+      - ENABLE_OLLAMA_API=false
+      - OLLAMA_BASE_URL=""
+      - USE_OLLAMA_DOCKER=false
+      
+      # Proper OpenAI Configuration
+      - OPENAI_API_BASE_URL=http://agent:8058/v1
+      - OPENAI_API_KEY=sk-local-dev-key-dummy
+      
+      # Model Configuration
+      - DEFAULT_MODELS=gpt-4o-mini
+      - MODEL_FILTER_LIST=""
     depends_on:
       agent:
         condition: service_healthy
@@ -428,7 +439,7 @@ services:
     expose:
       - 8058/tcp
     environment:
-      # Phase 1 Feature Flags
+      # Phase 1 Feature Flags  
       - MEMORY_ENABLED=false
       - STREAMING_ENABLED=false
       
