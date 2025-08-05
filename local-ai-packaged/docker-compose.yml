@@ -55,6 +55,7 @@ x-init-ollama: &init-ollama
 
 services:
   flowise:
+    profiles: ["extra"]
     image: flowiseai/flowise
     restart: unless-stopped
     container_name: flowise
@@ -103,6 +104,7 @@ services:
         condition: service_healthy
 
   n8n-import:
+    profiles: ["extra"]
     <<: *service-n8n
     container_name: n8n-import
     entrypoint: /bin/sh
@@ -113,6 +115,7 @@ services:
       - ./n8n/backup:/backup
 
   n8n:
+    profiles: ["extra"]
     <<: *service-n8n
     container_name: n8n
     restart: unless-stopped
@@ -200,6 +203,7 @@ services:
         max-file: "1"
 
   langfuse-worker:
+    profiles: ["extra"]
     image: langfuse/langfuse-worker:3
     restart: always
     depends_on: &langfuse-depends-on
@@ -258,6 +262,7 @@ services:
       REDIS_TLS_KEY: ${REDIS_TLS_KEY:-/certs/redis.key}
 
   langfuse-web:
+    profiles: ["extra"]
     image: langfuse/langfuse:3
     restart: always
     depends_on: *langfuse-depends-on
@@ -278,6 +283,7 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
 
   clickhouse:
+    profiles: ["extra"]
     image: clickhouse/clickhouse-server
     restart: always
     user: "101:101"
@@ -300,6 +306,7 @@ services:
       start_period: 1s
 
   minio:
+    profiles: ["extra"]
     image: minio/minio
     restart: always
     entrypoint: sh
@@ -321,6 +328,7 @@ services:
       start_period: 1s
 
   postgres:
+    profiles: ["extra"]
     image: postgres:${POSTGRES_VERSION:-latest}
     restart: unless-stopped
     healthcheck:
@@ -364,6 +372,7 @@ services:
       retries: 10
 
   searxng:
+    profiles: ["search"]
     container_name: searxng
     image: docker.io/searxng/searxng:latest
     restart: unless-stopped
@@ -485,10 +494,10 @@ services:
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8058/health"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 30s
 
   # Document ingestion automation
   agent-init:

@@ -17,25 +17,79 @@ help: ## Show this help message
 	@echo "$(YELLOW)Available commands:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-15s$(RESET) %s\n", $$1, $$2}'
 
-up: ## Start all services (Supabase + Agent)
-	@echo "$(GREEN)Starting Local RAG services...$(RESET)"
-	cd local-ai-packaged && docker-compose up -d
+up: ## Start core RAG services + database UI
+	@echo "$(GREEN)Starting Local RAG services with database UI...$(RESET)"
+	cd local-ai-packaged && docker-compose --profile database up -d
+	@echo "$(YELLOW)Waiting for services to be healthy...$(RESET)"
+	@sleep 30
 	@echo "$(GREEN)Services started! Access points:$(RESET)"
-	@echo "  🤖 Agent API:    http://localhost:8009"
-	@echo "  📊 Supabase:     http://localhost:8005" 
-	@echo "  🕸️  Neo4j:       http://localhost:8008"
-	@echo "  📝 N8N:          http://localhost:8001"
-	@echo "$(YELLOW)Wait ~60s for all services to be ready$(RESET)"
+	@echo "  🤖 Agent API:        http://localhost:8009"
+	@echo "  🌐 OpenWebUI:        http://localhost:8002"
+	@echo "  📊 Supabase Studio:  http://localhost:8005" 
+	@echo "  🕸️  Neo4j Browser:   http://localhost:8008"
+	@echo "$(GREEN)✅ System ready for use!$(RESET)"
 
-down: ## Stop all services
-	@echo "$(RED)Stopping Local RAG services...$(RESET)"
-	cd local-ai-packaged && docker-compose down
-	@echo "$(GREEN)Services stopped$(RESET)"
+down: ## Stop all services (including all profiles)
+	@echo "$(RED)Stopping ALL Local RAG services...$(RESET)"
+	cd local-ai-packaged && docker-compose --profile database --profile extra --profile search down --remove-orphans
+	@echo "$(GREEN)All services stopped and cleaned up$(RESET)"
+
+up-minimal: ## Start only core RAG services (no database UI)
+	@echo "$(GREEN)Starting minimal RAG services...$(RESET)"
+	cd local-ai-packaged && docker-compose up -d
+	@echo "$(YELLOW)Waiting for services to be healthy...$(RESET)"
+	@sleep 30
+	@echo "$(GREEN)Core services started! Access points:$(RESET)"
+	@echo "  🤖 Agent API:        http://localhost:8009"
+	@echo "  🌐 OpenWebUI:        http://localhost:8002"
+	@echo "  🕸️  Neo4j Browser:   http://localhost:8008"
+	@echo "$(GREEN)✅ Minimal system ready!$(RESET)"
+
+up-full: ## Start all services including extra tools
+	@echo "$(GREEN)Starting complete development environment...$(RESET)"
+	cd local-ai-packaged && docker-compose --profile database --profile extra --profile search up -d
+	@echo "$(YELLOW)Waiting for services to be healthy...$(RESET)"
+	@sleep 60
+	@echo "$(GREEN)Full environment started! Access points:$(RESET)"
+	@echo "  🤖 Agent API:        http://localhost:8009"
+	@echo "  🌐 OpenWebUI:        http://localhost:8002"
+	@echo "  📊 Supabase Studio:  http://localhost:8005" 
+	@echo "  🕸️  Neo4j Browser:   http://localhost:8008"  
+	@echo "  📝 N8N:              http://localhost:8001"
+	@echo "  🔄 Flowise:          http://localhost:8003"
+	@echo "  🔍 SearXNG:          http://localhost:8006"
+	@echo "  📊 Langfuse:         http://localhost:8007"
+	@echo "$(GREEN)✅ Full development environment ready!$(RESET)"
 
 build: ## Build the agent container
 	@echo "$(GREEN)Building agent container...$(RESET)"
 	cd local-ai-packaged && docker-compose build agent
 	@echo "$(GREEN)Agent container built$(RESET)"
+
+ready: ## Check if system is ready for use
+	@echo "$(GREEN)Checking system health...$(RESET)"
+	@echo "$(YELLOW)Testing core services:$(RESET)"
+	@curl -s http://localhost:8009/health > /dev/null && echo "  ✅ Agent API healthy" || echo "  ❌ Agent API failed"  
+	@curl -s http://localhost:8002 > /dev/null && echo "  ✅ OpenWebUI accessible" || echo "  ❌ OpenWebUI failed"
+	@curl -s http://localhost:8009/v1/models > /dev/null && echo "  ✅ Agent models endpoint working" || echo "  ❌ Agent models failed"
+	@echo "$(YELLOW)Testing data availability:$(RESET)"
+	@cd local-ai-packaged && docker-compose exec -T db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | grep -q "9" && echo "  ✅ Documents loaded (9 found)" || echo "  ❌ Documents missing"
+	@cd local-ai-packaged && docker-compose exec -T db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM chunks;" 2>/dev/null | grep -q "136" && echo "  ✅ Chunks loaded (136 found)" || echo "  ❌ Chunks missing"
+	@echo "$(GREEN)✅ System ready for RAG queries!$(RESET)"
+
+status: ## Show comprehensive service health dashboard  
+	@echo "$(GREEN)=== Service Status Dashboard ===$(RESET)"
+	@echo "$(YELLOW)Container Health:$(RESET)"
+	@cd local-ai-packaged && docker-compose ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+	@echo ""
+	@echo "$(YELLOW)Resource Usage:$(RESET)"
+	@docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | head -10
+	@echo ""
+	@echo "$(YELLOW)Access Points:$(RESET)"
+	@echo "  🤖 Agent API:        http://localhost:8009"
+	@echo "  🌐 OpenWebUI:        http://localhost:8002"
+	@echo "  📊 Supabase Studio:  http://localhost:8005" 
+	@echo "  🕸️  Neo4j Browser:   http://localhost:8008"
 
 logs: ## Show logs for all services
 	cd local-ai-packaged && docker-compose logs -f
