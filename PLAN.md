@@ -549,3 +549,121 @@ The project spans two directories:
 - All Docker commands must account for working directory context
 - Test scripts need explicit path handling for cross-directory operations
 - Future debugging requires understanding this dual-directory structure
+
+---
+
+## 🎯 Phase 3.3 Implementation Plan - Complete Docker Infrastructure Improvement (2025-08-05)
+
+### **Goal**
+Transform `make up` into a reliable one-command solution that starts ALL services ready for browser use, with `make down` providing clean shutdown, backed by comprehensive test coverage.
+
+### **Current Problems Analysis**
+1. **Database Services**: Supabase services failing to start consistently, stuck in "Created" state
+2. **Dependency Timing**: Agent waits for DB health but DB services don't transition to running
+3. **Missing Health Checks**: Some services lack proper health check configurations
+4. **Test Coverage Gap**: No end-to-end validation of complete startup sequence
+5. **User Experience**: Manual steps required after `make up` to access OpenWebUI at localhost:8002
+
+### **Implementation Strategy**
+
+#### **Phase 1: Docker Compose Infrastructure Fixes (30 min)**
+**Fix database startup reliability:**
+- Review Supabase service configurations for missing environment variables
+- Add proper health checks for all critical services (agent, database, OpenWebUI)
+- Fix service dependency chains with appropriate conditions
+- Add init containers where needed for proper startup sequencing
+- Resolve environment variable warnings (FLOWISE_USERNAME, FLOWISE_PASSWORD)
+
+**Improve service definitions:**
+- Ensure all services have proper restart policies
+- Add missing environment variables causing startup warnings
+- Optimize container resource limits and startup timeouts
+- Verify network connectivity between services
+
+#### **Phase 2: Makefile Enhancement (15 min)**
+**Update core targets:**
+- `make up`: Start all services with automatic readiness verification (wait for OpenWebUI at localhost:8002)
+- `make down`: Clean shutdown of all services with proper cleanup
+- `make status`: Comprehensive service health dashboard showing all container states
+- `make ready`: Quick check if system is ready for browser use
+
+**Add diagnostic targets:**
+- `make debug-startup`: Troubleshoot startup issues with detailed logging
+- `make logs-critical`: Show logs for core services (agent, db, openwebui, caddy)
+- `make restart-openwebui`: Restart OpenWebUI and dependencies if needed
+
+#### **Phase 3: Comprehensive Test Suite (30 min)**
+**Create `test_complete_startup.py`:**
+- Validate all services start and reach healthy state within timeout
+- Test OpenWebUI accessibility at localhost:8002 (via Caddy proxy)
+- Verify agent API endpoints respond correctly (health, models, chat completions)
+- Confirm streaming functionality works end-to-end
+- Test browser chat workflow (automated where possible)
+- Validate dependency chain: Database → Agent → OpenWebUI → Browser Access
+
+**Update existing tests:**
+- Integrate startup validation into existing test_phase1.py
+- Add timeout handling and retry logic for container health checks
+- Include dependency verification and service interconnectivity tests
+
+#### **Phase 4: Documentation Updates (10 min)**
+**Update PLAN.md with:**
+- Complete implementation details and troubleshooting guides
+- Service dependency maps and startup sequence documentation
+- Updated developer workflow (one-command deployment)
+- Common startup issues and resolution steps
+
+### **Expected Deliverables**
+
+#### **Technical Outcomes**
+1. **Reliable Startup**: `make up` → All services running and healthy within 2 minutes
+2. **Browser Ready**: OpenWebUI accessible at localhost:8002 immediately after startup completion
+3. **Clean Shutdown**: `make down` → Complete environment cleanup, no orphaned containers/volumes
+4. **Test Coverage**: Automated validation of entire stack functionality
+5. **Error Handling**: Clear error messages and recovery instructions for failed startups
+
+#### **User Experience**
+- **Single Command Deployment**: `make up && open http://localhost:8002`
+- **Predictable Behavior**: Same startup experience every time, no manual intervention
+- **Self-Diagnostic Capabilities**: Built-in health checking and troubleshooting
+- **Development-Friendly**: Easy debugging, log access, and service management
+
+### **Implementation Priority**
+1. **Critical**: Fix database service startup (blocks entire dependency chain)
+2. **High**: Add comprehensive health checks (enables reliable service dependencies)
+3. **High**: Create complete test suite (validates fixes work reliably)
+4. **Medium**: Enhance Makefile UX (improves developer experience)
+5. **Low**: Documentation updates (supports team adoption)
+
+### **Success Criteria**
+- ✅ `make up` → OpenWebUI accessible at localhost:8002 within 2 minutes
+- ✅ All Phase 3.2 streaming functionality preserved and working
+- ✅ `make down` → Complete cleanup, no orphaned containers/volumes
+- ✅ Test suite validates entire stack (database → agent → OpenWebUI → browser)
+- ✅ Zero manual intervention required for typical developer workflow
+- ✅ Consistent behavior across different development environments
+
+### **Technical Implementation Details**
+
+#### **Service Dependency Chain**
+```
+Supabase Database (db) → Agent (health check) → OpenWebUI → Caddy Proxy → localhost:8002
+```
+
+#### **Critical Health Checks Needed**
+- **Database**: PostgreSQL ready for connections
+- **Agent**: API endpoints responding (health, models)  
+- **OpenWebUI**: Container started and web interface ready
+- **Caddy**: Proxy routes configured and forwarding correctly
+
+#### **Test Coverage Requirements**
+- Container startup validation (all services reach "running" state)
+- Network connectivity between services
+- API endpoint functionality (direct and proxied)
+- Browser accessibility (localhost:8002 responds)
+- Streaming functionality end-to-end
+- Database connectivity and write prevention in stateless mode
+
+### **Estimated Completion Time: 85 minutes total**
+
+**Ready for Phase 3.3 implementation to deliver the complete "one-command startup" developer experience.**
