@@ -441,7 +441,7 @@ services:
     environment:
       # Phase 1 Feature Flags  
       - MEMORY_ENABLED=false
-      - STREAMING_ENABLED=false
+      - STREAMING_ENABLED=true
       
       # Application config
       - APP_ENV=production

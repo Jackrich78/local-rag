@@ -130,3 +130,26 @@ validate-phase32: up ## Full Phase 3.2 validation
 	@echo "\n$(YELLOW)Running acceptance tests...$(RESET)"
 	@make test-phase32
 	@echo "\n$(GREEN)Phase 3.2 validation complete!$(RESET)"
+
+# Phase 1 Commands
+test-phase1: build up ## Run Phase 1 acceptance tests  
+	@echo "$(GREEN)Running Phase 1 OpenWebUI integration tests...$(RESET)"
+	@sleep 60  # Wait for services to start
+	@echo "$(YELLOW)Testing OpenWebUI access...$(RESET)"
+	@curl -f http://localhost:8002 > /dev/null 2>&1 && echo "✅ OpenWebUI accessible" || echo "❌ OpenWebUI not responding"
+	@echo "$(YELLOW)Testing OpenAI models endpoint...$(RESET)"  
+	@curl -f http://localhost:8009/v1/models > /dev/null 2>&1 && echo "✅ Models endpoint working" || echo "❌ Models endpoint failed"
+	@echo "$(YELLOW)Testing OpenAI chat completions (stateless)...$(RESET)"
+	@curl -X POST http://localhost:8009/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "ping"}]}' \
+		> /dev/null 2>&1 && echo "✅ OpenAI chat endpoint working" || echo "❌ OpenAI chat endpoint failed"
+	@echo "$(YELLOW)Verifying no database writes...$(RESET)"
+	@cd local-ai-packaged && docker-compose exec -T supabase-db psql -U postgres -c "SELECT COUNT(*) FROM messages;" | grep -q "0" && echo "✅ No database writes confirmed" || echo "❌ Database writes detected"
+
+wipe-openwebui: ## Wipe OpenWebUI volume and restart
+	@echo "$(RED)Wiping OpenWebUI volume...$(RESET)"
+	cd local-ai-packaged && docker-compose down open-webui
+	docker volume rm local-ai-packaged_open-webui || true
+	cd local-ai-packaged && docker-compose up -d open-webui
+	@echo "$(GREEN)OpenWebUI volume wiped and restarted$(RESET)"

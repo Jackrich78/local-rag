@@ -6,6 +6,7 @@ import os
 import asyncio
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -76,6 +77,11 @@ logging.basicConfig(
 # Set debug level for our module during development
 if APP_ENV == "development":
     logger.setLevel(logging.DEBUG)
+
+# Phase 1 startup verification
+memory_enabled = os.getenv("MEMORY_ENABLED", "true").lower() == "true"
+streaming_enabled = os.getenv("STREAMING_ENABLED", "true").lower() == "true"
+logger.info(f"🚀 Phase 1 Agent Starting - MEMORY_ENABLED={memory_enabled}, STREAMING_ENABLED={streaming_enabled}")
 
 
 @asynccontextmanager
@@ -443,6 +449,135 @@ async def execute_agent(
         return error_response, []
 
 
+async def _create_streaming_response(
+    user_message: str,
+    session_id: str,
+    user_id: Optional[str],
+    model: str,
+    save_conversation: bool,
+    memory_enabled: bool
+):
+    """Create OpenAI-compatible streaming response."""
+    async def generate_openai_stream():
+        """Generate OpenAI-compatible SSE stream."""
+        try:
+            # Create response ID for OpenAI format
+            response_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
+            timestamp = int(time.time())
+            
+            # Create dependencies
+            deps = AgentDependencies(
+                session_id=session_id,
+                user_id=user_id
+            )
+            
+            # Get conversation context if memory enabled
+            context = []
+            if memory_enabled:
+                context = await get_conversation_context(session_id)
+            
+            # Build prompt with context
+            full_prompt = user_message
+            if context:
+                context_str = "\n".join([
+                    f"{msg['role']}: {msg['content']}"
+                    for msg in context[-6:]  # Last 3 turns
+                ])
+                full_prompt = f"Previous conversation:\n{context_str}\n\nCurrent question: {user_message}"
+            
+            full_response = ""
+            
+            # Stream using agent.iter() pattern (same as /chat/stream)
+            async with rag_agent.iter(full_prompt, deps=deps) as run:
+                async for node in run:
+                    if rag_agent.is_model_request_node(node):
+                        # Stream tokens from the model
+                        async with node.stream(run.ctx) as request_stream:
+                            async for event in request_stream:
+                                from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
+                                
+                                delta_content = ""
+                                if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
+                                    delta_content = event.part.content
+                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                                    delta_content = event.delta.content_delta
+                                
+                                if delta_content:
+                                    full_response += delta_content
+                                    
+                                    # Create OpenAI-compatible chunk
+                                    chunk = {
+                                        "id": response_id,
+                                        "object": "chat.completion.chunk",
+                                        "created": timestamp,
+                                        "model": model,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": {"content": delta_content},
+                                            "finish_reason": None
+                                        }]
+                                    }
+                                    
+                                    yield f"data: {json.dumps(chunk)}\n\n"
+            
+            # Send final chunk with finish_reason
+            final_chunk = {
+                "id": response_id,
+                "object": "chat.completion.chunk", 
+                "created": timestamp,
+                "model": model,
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            
+            # Send [DONE] message per OpenAI spec
+            yield "data: [DONE]\n\n"
+            
+            # Save conversation if enabled
+            if save_conversation:
+                await save_conversation_turn(
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_message=full_response,
+                    metadata={
+                        "user_id": user_id,
+                        "streamed": True,
+                        "openai_format": True
+                    }
+                )
+            
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            # Send error chunk
+            error_chunk = {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": model,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": f"Error: {str(e)}"},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+    
+    return StreamingResponse(
+        generate_openai_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive", 
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+
 # OpenAI-compatible API Endpoints
 @app.get("/v1/models")
 async def get_models():
@@ -466,47 +601,58 @@ async def get_models():
 @app.post("/v1/chat/completions")
 async def chat_completions(request: OpenAIChatRequest):
     """OpenAI-compatible chat completions endpoint."""
-    print(f">>> OpenAI endpoint called with model: {request.model}")
-    logger.info(f"OpenAI endpoint called with model: {request.model}")
+    # Phase 1 startup log to verify container is running updated code
+    logger.info("🤖 OpenAI Chat Completions - Streaming:" + str(request.stream))
+    
     try:
-        # Convert OpenAI format to internal ChatRequest format
-        logger.info("Converting OpenAI request to internal format")
+        # Check if streaming is requested but disabled
+        streaming_enabled = os.getenv("STREAMING_ENABLED", "true").lower() == "true"
+        if request.stream and not streaming_enabled:
+            raise HTTPException(
+                status_code=400, 
+                detail="Streaming is disabled in this configuration"
+            )
+        
+        # Convert OpenAI format to internal format
         user_message, user_id = convert_openai_to_internal(request)
-        logger.info(f"Converted: user_message='{user_message[:50]}...', user_id='{user_id}'")
         
-        # Create internal ChatRequest to reuse working session logic
-        internal_request = ChatRequest(
-            message=user_message,
-            session_id=None,  # Let system create new session
-            user_id=user_id,
-            metadata={"openai_format": True, "model": request.model}
-        )
+        # Check memory mode
+        memory_enabled = os.getenv("MEMORY_ENABLED", "true").lower() == "true"
         
-        # Use the working session logic from /chat endpoint
-        logger.info(f"OpenAI endpoint calling get_or_create_session")
-        session_id = await get_or_create_session(internal_request)
-        logger.info(f"OpenAI endpoint created/retrieved session: {session_id}")
+        if memory_enabled:
+            # Full memory mode - use existing session logic
+            internal_request = ChatRequest(
+                message=user_message,
+                session_id=None,
+                user_id=user_id,
+                metadata={"openai_format": True, "model": request.model}
+            )
+            
+            session_id = await get_or_create_session(internal_request)
+            save_conversation = True
+        else:
+            # Stateless mode - create temporary session ID, no DB writes
+            session_id = str(uuid.uuid4())  # Valid UUID format for compatibility
+            save_conversation = False
         
-        # Verify session exists in database
-        session_check = await get_session(session_id)
-        logger.info(f"Session verification: {session_check is not None}")
-        if not session_check:
-            logger.error(f"Session {session_id} was not found in database after creation!")
-        
-        # For non-streaming requests
-        if not request.stream:
-            try:
-                # Execute agent
-                response, tools_used = await execute_agent(
-                    message=user_message,
-                    session_id=session_id,
-                    user_id=user_id
-                )
-            except Exception as agent_error:
-                # Handle agent execution failures gracefully
-                logger.error(f"Agent execution failed: {agent_error}")
-                response = f"I'm experiencing technical difficulties: {str(agent_error)}"
-                tools_used = []
+        # Handle streaming vs non-streaming
+        if request.stream:
+            return await _create_streaming_response(
+                user_message=user_message,
+                session_id=session_id,
+                user_id=user_id,
+                model=request.model,
+                save_conversation=save_conversation,
+                memory_enabled=memory_enabled
+            )
+        else:
+            # Non-streaming response
+            response, tools_used = await execute_agent(
+                message=user_message,
+                session_id=session_id,
+                user_id=user_id,
+                save_conversation=save_conversation
+            )
             
             # Create OpenAI-compatible response
             openai_response = create_openai_response(
@@ -517,127 +663,6 @@ async def chat_completions(request: OpenAIChatRequest):
             )
             
             return openai_response
-        
-        # For streaming requests
-        else:
-            
-            async def generate_openai_stream():
-                """Generate OpenAI-compatible streaming response."""
-                try:
-                    import time
-                    
-                    response_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
-                    timestamp = int(time.time())
-                    
-                    # Create dependencies
-                    deps = AgentDependencies(
-                        session_id=session_id,
-                        user_id=user_id
-                    )
-                    
-                    # Get conversation context
-                    context = await get_conversation_context(session_id)
-                    
-                    # Build input with context
-                    full_prompt = user_message
-                    if context:
-                        context_str = "\n".join([
-                            f"{msg['role']}: {msg['content']}"
-                            for msg in context[-6:]
-                        ])
-                        full_prompt = f"Previous conversation:\n{context_str}\n\nCurrent question: {user_message}"
-                    
-                    # Save user message immediately
-                    await add_message(
-                        session_id=session_id,
-                        role="user",
-                        content=user_message,
-                        metadata={"user_id": user_id}
-                    )
-                    
-                    full_response = ""
-                    
-                    # Stream using agent.iter() pattern
-                    async with rag_agent.iter(full_prompt, deps=deps) as run:
-                        async for node in run:
-                            if rag_agent.is_model_request_node(node):
-                                # Stream tokens from the model
-                                async with node.stream(run.ctx) as request_stream:
-                                    async for event in request_stream:
-                                        from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
-                                        
-                                        content = ""
-                                        if isinstance(event, PartStartEvent) and event.part.part_kind == 'text':
-                                            content = event.part.content
-                                        elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                                            content = event.delta.content_delta
-                                        
-                                        if content:
-                                            # Create OpenAI streaming chunk
-                                            chunk = OpenAIChatResponse(
-                                                id=response_id,
-                                                object="chat.completion.chunk",
-                                                created=timestamp,
-                                                model=request.model,
-                                                choices=[OpenAIChoice(
-                                                    index=0,
-                                                    delta=OpenAIDelta(content=content),
-                                                    finish_reason=None
-                                                )]
-                                            )
-                                            
-                                            yield f"data: {chunk.model_dump_json()}\n\n"
-                                            full_response += content
-                    
-                    # Save assistant response
-                    await add_message(
-                        session_id=session_id,
-                        role="assistant",
-                        content=full_response,
-                        metadata={"streamed": True}
-                    )
-                    
-                    # Send final chunk with finish_reason
-                    final_chunk = OpenAIChatResponse(
-                        id=response_id,
-                        object="chat.completion.chunk",
-                        created=timestamp,
-                        model=request.model,
-                        choices=[OpenAIChoice(
-                            index=0,
-                            delta=OpenAIDelta(),
-                            finish_reason="stop"
-                        )]
-                    )
-                    
-                    yield f"data: {final_chunk.model_dump_json()}\n\n"
-                    yield "data: [DONE]\n\n"
-                    
-                except Exception as e:
-                    logger.error(f"OpenAI streaming error: {e}")
-                    error_chunk = OpenAIChatResponse(
-                        id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
-                        object="chat.completion.chunk",
-                        created=int(time.time()),
-                        model=request.model,
-                        choices=[OpenAIChoice(
-                            index=0,
-                            delta=OpenAIDelta(content=f"Error: {str(e)}"),
-                            finish_reason="stop"
-                        )]
-                    )
-                    yield f"data: {error_chunk.model_dump_json()}\n\n"
-                    yield "data: [DONE]\n\n"
-            
-            return StreamingResponse(
-                generate_openai_stream(),
-                media_type="text/plain",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "Content-Type": "text/event-stream"
-                }
-            )
         
     except Exception as e:
         logger.error(f"Chat completions endpoint failed: {e}")
