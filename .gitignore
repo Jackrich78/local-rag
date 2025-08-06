@@ -20,3 +20,4 @@ PLANNING_BACKUP
 # Test reports and artifacts
 tests/reports/
 tests/__pycache__/
+docs/archive/
