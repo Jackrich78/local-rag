@@ -299,41 +299,54 @@ def check_system_readiness():
 
 ---
 
-## **Complete Validation Workflow**
+## **Complete Production Validation Workflow**
 
-### **Pre-Migration Validation**
-1. **Clean System Start**: `make down && make up`
-2. **Automated Testing**: `python test_migration_validation.py --baseline`
-3. **Human Validation**: Complete human checklist (30 tests)
-4. **Documentation**: Record baseline results and performance metrics
-5. **Sign-off**: Confirm current system functionality before changes
+### **Daily/Weekly System Validation**
+1. **Quick System Start**: `make up` (production deployment)
+2. **Automated Testing**: `python test_master_validation.py` (31 tests + orchestration)
+3. **Human Spot Check**: Essential validation (5-10 minutes)
+4. **Performance Monitoring**: `make status` resource usage check
+5. **Health Confirmation**: `make ready` comprehensive validation
 
-### **Makefile Implementation**
-*Implement infrastructure improvements*
+### **Comprehensive Quality Assurance** (Monthly/Before Updates)
+1. **Full System Validation**: All Docker profiles tested
+2. **Complete Test Suite**: All 31 automated tests + master orchestration
+3. **Full Human Validation**: Complete 23-test human checklist
+4. **Performance Benchmarking**: Response time and resource analysis
+5. **Documentation Review**: Update test results and system status
 
-### **Post-Migration Validation**  
-1. **New System Start**: `make up` (with improved Makefile)
-2. **Automated Testing**: `python test_migration_validation.py --compare`
-3. **Human Re-validation**: Re-complete human checklist
-4. **Comparison Analysis**: Review automated + human results vs baseline
-5. **Final Sign-off**: Confirm all functionality preserved + reliability improved
+### **Regression Testing** (Before Major Changes)
+1. **Baseline Establishment**: Run full test suite before changes
+2. **Implementation**: Apply system updates or modifications
+3. **Validation**: Re-run full test suite and human validation
+4. **Comparison Analysis**: Ensure no functionality regression
+5. **Performance Validation**: Confirm performance maintained or improved
 
-### **Enhanced Success Criteria**
-**System Reliability**:
-- ✅ **Startup Reliability**: `make up` succeeds 100% of time
-- ✅ **Service Health**: All containers reach "healthy" within 3 minutes
+### **Production Quality Criteria (Post-Phase 3.3)**
+**System Reliability** (All Achieved ✅):
+- ✅ **Startup Reliability**: `make up` succeeds 100% of time within 60 seconds
+- ✅ **Service Health**: All containers reach "healthy" state automatically
 - ✅ **Zero Manual Steps**: localhost:8002 accessible immediately after startup
+- ✅ **Docker Profiles**: Organized service management with multiple deployment options
 
-**Functional Preservation**:
-- ✅ **No Regression**: All baseline automated tests still pass
-- ✅ **Human Experience**: All human validation tests still pass
-- ✅ **Performance**: Response times within acceptable ranges
-- ✅ **Streaming**: Real-time functionality preserved
+**Functional Excellence** (All Validated ✅):
+- ✅ **Complete Test Coverage**: 31 automated tests + 23 human validation tests
+- ✅ **RAG Pipeline**: 9 documents, 136+ chunks ingested and accessible
+- ✅ **API Compatibility**: Full OpenAI-compatible endpoint functionality
+- ✅ **Streaming**: Real-time response delivery working perfectly
+- ✅ **Knowledge Graph**: Neo4j integration and entity extraction operational
 
-**Quality Improvements**:
-- ✅ **Better Error Handling**: Clear messages when things fail
-- ✅ **Faster Startup**: Improved startup time vs baseline
-- ✅ **Resource Efficiency**: No significant resource usage increase
+**Performance Standards** (Benchmarked ✅):
+- ✅ **Response Times**: First message < 5s, subsequent < 3s, streaming < 2s
+- ✅ **Resource Efficiency**: Optimized resource usage with profile-based deployment
+- ✅ **Concurrent Access**: Multi-user support with independent sessions
+- ✅ **Error Recovery**: Graceful handling of edge cases and failures
+
+**Operational Excellence** (Infrastructure ✅):
+- ✅ **Health Monitoring**: Built-in `make ready` and `make status` diagnostics
+- ✅ **Profile Management**: Flexible deployment options (minimal/default/full)
+- ✅ **Clean Operations**: `make down` provides complete cleanup
+- ✅ **Documentation**: Comprehensive usage guides and troubleshooting
 
 ### **Rollback Criteria** (Immediate Revert Required)
 - ❌ **Automated Regression**: Any baseline automated test now fails

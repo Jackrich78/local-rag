@@ -1,0 +1,118 @@
+{
+  "timestamp": "2025-08-05T23:32:06.320191",
+  "execution_time": 21.813007831573486,
+  "overall_status": "NEEDS_ATTENTION",
+  "summary": {
+    "total_suites": 5,
+    "passed_suites": 1,
+    "failed_suites": 4,
+    "success_rate": 20.0
+  },
+  "detailed_results": {
+    "System Health": {
+      "success": true,
+      "message": "Completed in 15.2s with exit code 0",
+      "exit_code": 0,
+      "execution_time": 15.210388898849487,
+      "stdout": "\ud83e\uddea Running System Health Test Suite\n============================================================\n\n\ud83d\udccb Running 11 comprehensive system health tests...\n\n\ud83d\udd0d Testing Health Endpoint...\n\u2705 Health endpoint working\n\n\ud83d\udd0d Testing Models Endpoint...\n\u2705 Models endpoint working\n\n\ud83d\udd0d Testing Chat Completions...\n\u2705 Chat completions working\n\n\ud83d\udd0d Testing OpenWebUI Access...\n\u2705 OpenWebUI accessible\n\n\ud83d\udd0d Testing Database Writes (Stateless)...\n\u2705 No database writes confirmed (stateless mode working)\n\n\ud83d\udd0d Testing Agent Startup Logs...\n\u2705 Agent startup logs confirmed\n\n\ud83d\udd0d Testing All Expected Containers Running...\n\u2705 All 6 core containers running\n\n\ud83d\udd0d Testing Data Ingestion Pipeline...\n\u2705 Data pipeline healthy: 9 documents, 136 chunks\n\n\ud83d\udd0d Testing Knowledge Graph Population...\n\u274c Cannot query Neo4j - authentication or connection issue\nNeo4j error: 42NFF: syntax error or access rule violation - permission/access denied. Access denied, see the secu\n\u26a0\ufe0f  Neo4j check skipped - not critical for core functionality\n\n\ud83d\udd0d Testing Environment Variables...\n\u2705 All critical environment variables present\n\n\ud83d\udd0d Testing Service Networking...\n\u2705 Service networking functional\n\n============================================================\n\ud83d\udcca Results: 11/11 tests passed (100.0% success rate)\n\ud83c\udf89 All system health tests passed!\n\n\ud83c\udfaf System Health Validated:\n  \u2705 All core services operational\n  \u2705 Docker infrastructure healthy\n  \u2705 RAG data pipeline functional\n  \u2705 Service networking working\n  \u2705 Environment configuration correct\n",
+      "stderr": ""
+    },
+    "API & Streaming": {
+      "success": false,
+      "message": "Completed in 0.1s with exit code 1",
+      "exit_code": 1,
+      "execution_time": 0.08266091346740723,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/Users/jack/Developer/local-RAG/tests/test_api_streaming.py\", line 11, in <module>\n    import aiohttp\nModuleNotFoundError: No module named 'aiohttp'\n"
+    },
+    "User Interface": {
+      "success": false,
+      "message": "Completed in 0.0s with exit code 1",
+      "exit_code": 1,
+      "execution_time": 0.04542994499206543,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/Users/jack/Developer/local-RAG/tests/test_user_interface.py\", line 13, in <module>\n    import requests\nModuleNotFoundError: No module named 'requests'\n"
+    },
+    "Docker Profiles": {
+      "success": false,
+      "message": "Docker profiles validation: 3/4 profiles valid",
+      "profile_results": {
+        "minimal": {
+          "success": true,
+          "services": [
+            "vector",
+            "db",
+            "neo4j",
+            "agent",
+            "caddy",
+            "open-webui",
+            "qdrant",
+            "redis"
+          ],
+          "count": 8
+        },
+        "database": {
+          "success": true,
+          "services": [
+            "vector",
+            "db",
+            "analytics",
+            "studio",
+            "caddy",
+            "meta",
+            "neo4j",
+            "agent",
+            "open-webui",
+            "qdrant",
+            "redis"
+          ],
+          "count": 11
+        },
+        "extra": {
+          "success": false,
+          "error": "time=\"2025-08-05T23:32:06+01:00\" level=warning msg=\"The \\\"FLOWISE_USERNAME\\\" variable is not set. Defaulting to a blank string.\"\ntime=\"2025-08-05T23:32:06+01:00\" level=warning msg=\"The \\\"FLOWISE_PASSWORD\\\" variable is not set. Defaulting to a blank string.\"\nservice \"functions\" depends on undefined service \"analytics\": invalid compose project\n"
+        },
+        "search": {
+          "success": true,
+          "services": [
+            "vector",
+            "db",
+            "qdrant",
+            "neo4j",
+            "agent",
+            "caddy",
+            "open-webui",
+            "redis",
+            "searxng"
+          ],
+          "count": 9
+        }
+      },
+      "currently_running": [
+        "agent",
+        "caddy",
+        "neo4j",
+        "open-webui",
+        "qdrant",
+        "redis",
+        "analytics",
+        "db",
+        "meta",
+        "studio",
+        "vector"
+      ]
+    },
+    "System Readiness": {
+      "success": false,
+      "message": "System readiness check failed: No module named 'requests'"
+    }
+  },
+  "recommendations": [
+    "\ud83c\udf10 Investigate API endpoint connectivity issues",
+    "\ud83d\udce1 Check streaming functionality and service communication",
+    "\ud83d\udda5\ufe0f Verify OpenWebUI configuration and accessibility",
+    "\ud83d\udd04 Test browser workflows and error handling",
+    "\ud83d\udc33 Review Docker Compose profile configurations",
+    "\u26a1 Address system readiness issues before deployment"
+  ]
+}

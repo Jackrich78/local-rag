@@ -1,138 +1,192 @@
-# Master Plan – Agentic Knowledge Base System
+# Agentic‑RAG Knowledge Graph – Consolidated Plan (v6)
 
-## 0. Context
+## 0 · Purpose
 
-Build a local-first, agent-driven knowledge base that combines vector RAG and Neo4j knowledge‑graph reasoning.  Primary use‑case: query a scraped Notion corpus (~100 pages) through a terminal chat agent.  Hardware: MacBook Pro M2 Max.  All services run in Docker Compose except the Python agent for v0 (venv, later containerised).
-
----
-
-## 1. Guiding Principles
-
-1. **Single Walking Skeleton first.** One data source, one agent, one UI.
-2. **Local services over cloud** except for OpenAI models.
-3. **Stateless containers, stateful volumes.** Data lives in mounted volumes, secrets in Docker secrets or `.env` (to be migrated).
-4. **Fail fast.** Each phase ends with an executable demo and minimal test.
+Provide a single, up‑to‑date blueprint for the coding agent.  **Phase 5 – Test Reality Alignment** is the active work‑stream; Phases 0‑4 are finished and kept only for context.
 
 ---
 
-## 2. Roadmap & Milestones
+## 0.1 · Guiding Principles
 
-| Phase | Goal | Key Deliverables | Target Date |
-| --- | --- | --- | --- |
-| **0** | Environment ready & KG bug fixed | ✔ Neo4j and Graphiti reachable, ✔ `MATCH (n) RETURN count(n)` > 0 | D+1 |
-| **1** | Ingest Notion JSON → Supabase + Neo4j | ✔ CLI `ingest --clean --verbose` succeeds, ✔ 100 % docs vectorised & graphed, ✔ sample Cypher query returns expected triples | D+2 |
-| **2** | CLI Question‑Answer agent | ✔ `python cli.py` interactive REPL, ✔ answers 8/10 gold questions correctly, ✔ < 10 s latency, ✔ citations (vector + graph) | D+3 |
-| **3** | Dockerisation of agent | ✔ `docker-compose -f full-stack.yml up` brings **all** services including agent API, ✔ health‑check endpoints | D+5 |
-| **4** | Context‑7 MCP tool | ✔ MCP microservice container, ✔ agent tool hook, ✔ internal docs answerable | +1 week |
-| **5** | Multi‑agent orchestrator & Web UI | ✔ Orchestrator agent container, ✔ Open WebUI chat wired, ✔ user can select knowledge‑base | TBD |
+1. **Single Walking Skeleton first** – start with one data source, one agent, one UI.
+2. **Local‑first** – prefer local services over cloud (OpenAI models are the exception).
+3. **Stateless containers, stateful volumes** – persist data in volumes; keep containers ephemeral.
+4. **Fail fast** – finish every phase with a runnable demo and minimal test suite.
 
-> D = start of implementation (today)
-> 
+These principles originate from the original Master Plan and remain non‑negotiable for all future phases. fileciteturn2file0
 
 ---
 
-## 3. Architecture (Target after Phase 3)
+## 1 · Current Architecture (post‑Phase 4)
 
 ```
-                 ┌────────────┐           ┌─────────────┐
-        chat →   │  CLI / UI  │  HTTP     │  Agent API  │
-                 └────────────┘  ↖︎tool    └─────────────┘
-                       │             ↙︎              ↘︎
-                       │            ↙︎                 ↘︎
-                Postgres (Supabase)      Neo4j + Graphiti
-                 vectors, chunks          knowledge‑graph
-                       │                        │
-                       └──────→ OpenAI (embeddings & chat)
-
+┌───────────────┐  http  ┌────────────┐
+│ Open WebUI    │ ─────▶ │  Orchestrator* │
+└───────────────┘        │    (agent)   │
+        ▲                 └──────┬─────┘
+        │ REST                ↙︎     ↘︎
+        │               Supabase    Neo4j
+        │              (vectors)   (graph)
+        │                        ↘︎
+        │                     OpenAI API
 ```
 
-*Docker Compose services*: `supabase`, `supavisor`, `neo4j`, `graphiti`, `agent`, `open-webui` (optional), `mcps` (future).
+*The Orchestrator container subsumes the previous “agent” API: it listens on ****8058**** inside the container and is published on ****8059**** to the host network.*
+
+Key runtime flags (all in `docker‑compose.yml`):
+
+| Var                 | Default                  | Meaning                         |
+| ------------------- | ------------------------ | ------------------------------- |
+| `MEMORY_ENABLED`    | `false`                  | Skip DB writes (stateless mode) |
+| `STREAMING_ENABLED` | `true` (Phase 3.2+)      | Enable SSE chunking             |
+| `LLM_CHOICE`        | `gpt‑4o‑mini`            | Primary model used everywhere   |
+| `EMBEDDING_MODEL`   | `text‑embedding‑3‑small` | Vector store embeddings         |
+
+Docker profiles: **core** (agent, UI, DB, Neo4j, Qdrant, Caddy) · **database** (Supabase Studio etc.) · **extra** (MCPs, Langfuse, n8n, Flowise) · **search** (SearXNG).
+
+## 1.1 · Port Map — *source of truth 2025‑08‑06*
+
+\| Host Port | Route | Container\:Port | Notes |
+|## 2 · Phase 5 — *Test Reality Alignment*  🔄  · Phase 5 — *Test Reality Alignment*  🔄 
+
+### Goal
+
+Update the automated test‑suite so it reflects the working system, eliminating false negatives (especially in `tests/test_api_streaming.py`).
+
+### Deliverables
+
+1. **Fixed expectations** — model list recognises `gpt‑4o‑mini`; latency threshold raised to < 2 s; network checks reuse health helper.
+2. **Async hygiene** — proper `aiohttp` context managers, no `await` on sync fns, sessions closed correctly.
+3. **Streaming validator** — confirms correct SSE chunk format `delta.content`, `[DONE]` terminator.
+4. **Pass gate** — CI passes 31/31 automated tests + master orchestration.
+
+### Success criteria
+
+| Metric                             | Target                     |
+| ---------------------------------- | -------------------------- |
+| API streaming tests                | **11/11 pass**             |
+| `python test_master_validation.py` | exits 0 every run          |
+| Browser chat                       | unaffected (manual sanity) |
+
+### Work‑list
+
+1. **Align assertions** → `tests/test_api_streaming.py` lines 33‑71.
+2. **Refactor latency benchmark** → helper `first_token_latency(target=2.0)`.
+3. **Fix session closed errors** → wrap each HTTP call inside `async with`.
+4. **Kong stub removal** → delete obsolete Kong container check.
+5. **Run full matrix**: `make up‑minimal`, `make up`, `make up‑full`, `make up --profile search` → all green.
 
 ---
 
-## 4. Phase Breakdown
+## 2.1 · Global Acceptance Criteria
 
-### Phase 0 – Env & Bug‑fix
+| # | Criterion                                                                      |
+| - | ------------------------------------------------------------------------------ |
+| 1 | `make demo` (or `make up && make ready`) responds to a question in **≤ 10 s**  |
+| 2 | Responses include citations to either vector **doc id** or graph **entity id** |
+| 3 | **All automated tests pass** (`pytest -q`)                                     |
+| 4 | Codebase is **lint‑clean** (`ruff`) and **type‑safe** (`mypy --strict`)        |
 
-- Reproduce KG ingestion error; capture stack‑trace.
-- Verify `graphiti-core` import patch works.
-- Add Makefile targets: `make up`, `make logs`, `make db-shell`.
+### Key Product Decisions
 
-### Phase 1 – Ingestion Pipeline
-
-- **Input**: Notion JSON directory.
-- **Steps**: clean → chunk (existing rules) → vectorise w/ OpenAI → graph build (Graphiti).
-- **Tables used**: `documents`, `chunks`.
-- **Graph schema** (initial):
-    - Nodes: `Page {id, title, url}`, `Heading {text}`, `Entity {name}`.
-    - Rels: `PAGE_CONTAINS_HEADING`, `MENTIONS` (Page→Entity).
-- **Tests**: pytest fixture with 2 pages.
-
-### Phase 2 – CLI Agent
-
-- **LLM**: gpt‑4o (chat), `text-embedding-3-small`.
-- **Prompt structure**: system + memory + retrieved (k = 4) + user.
-- **Memory**: insert every turn into `messages` (session table).
-- **Eval**: simple JSON file with 10 Q/A pairs; script counts correct matches.
-
-### Phase 3
-
-[Phase 3 – Dockerisation & Secrets](https://www.notion.so/Phase-3-Dockerisation-Secrets-2432b7314780800c919adbe18bcf3a7f?pvs=21)
-
-- Build `agent` image (Python 3.10‑slim).
-- Use `docker compose --env-file .env.prod`.
-- Move credentials to **Docker secrets** (OpenAI, Neo4j).
-- Implement health check endpoints for Supabase, Neo4j, Agent.
-- To start just core services: `docker compose --profile core up -d`
-
-### Phase 4 – Context‑7 MCP Tool
-
-[PHASE 4-A - Context7 for Claude](https://www.notion.so/PHASE-4-A-Context7-for-Claude-2432b7314780803c9b4ec3388b287fde?pvs=21)
-
-[PHASE 4-b MCPs for agentic-rag](https://www.notion.so/PHASE-4-b-MCPs-for-agentic-rag-2432b7314780800c8eb9f8b4e4dbd5cf?pvs=21)
-
-- Container `mcp-context7` exposing HTTP search endpoint.
-- Agent tool schema: `{query:string} → {answer:string, sources:list}`.
-- Extend ingestion pipeline to index Context‑7 docs.
-- https://www.youtube.com/watch?v=MBaTuJfICP4
-    
-    Supabase MCP
-    
-    Crawl4AI MCP
-    
-    Context7 MCP
-    
-    Brave MCP
-    
-    n8n
-    
-    Notion
-    
-
-### Phase 5 – Orchestrator & Web UI
-
-- Adopt LangGraph or CrewAI for multi‑agent flows.
-- Open WebUI talks to Orchestrator via REST.
-- Role‑based routing: `researcher`, `planner`, `executor`.
+* **Retention**: keep chat messages **30 days**, then auto‑purge fileciteturn4file3.
+* **Graph schema**: minimal (`Page`, `Heading`, `Entity`) is sufficient for now fileciteturn4file3.
+* **Python version**: locked to **3.13**.
+* **Secrets**: sensitive creds moved to **Docker secrets** in Phase 3.
+* **Licensing**: prefer permissive OSS; human review before adopting paid services.
 
 ---
 
-## 5. Acceptance Criteria (v0 = Phases 0‑2)
+## 3 · Historical Phases (compressed)
 
-1. Dev can run `make demo` and ask a question; answer returns within 10 s.
-2. Answer text cites either vector doc id or graph entity id.
-3. All tests pass (`pytest -q`).
-4. Code lint‑clean (`ruff`, `mypy --strict`).
+> Completed; do **not** modify unless rolling back.
 
-- Future
-    - [planning] Better PRD template builder
+### Phase 4 — Test Infrastructure Enhancement ✅ *(2025‑08‑05)*
+
+* Expanded test coverage from 18 → **31** automated cases
+* Added **master orchestration runner** `test_master_validation.py`
+* Human validation checklist (23 items) documented in `TEST_PLAN.md`
+* Profiles validation ensures every compose combination boots & passes health
+
+### Phase 3 — Dockerisation & Streaming ✅ *(2025‑08‑03 → 08‑05)*
+
+| Sub‑phase | Outcome                                                                                 |
+| --------- | --------------------------------------------------------------------------------------- |
+| **3.1**   | Moved compose to repo root, packaged agent & CLI, green CI on arm64                     |
+| **3.2**   | Enabled SSE streaming (`STREAMING_ENABLED=true`), browser real‑time tokens              |
+| **3.3**   | Introduced Docker **profiles**, `make up` reliable in ≤ 60 s, health‑check optimisation |
+
+### Phase 2 — CLI Question‑Answer Agent ✅ *(2025‑08‑02)*
+
+* `agent-cli` interactive REPL answers 8/10 gold questions in < 10 s
+* Prompt template: system + memory + retrieved **k=4** + user
+* Uses Supabase vectors + Neo4j entities for citations
+
+### Phase 1 — OpenWebUI Stateless MVP ✅ *(2025‑08‑01 → 08‑04)*
+
+* Zero‑login **OpenWebUI** (`WEBUI_AUTH=false`, `ENABLE_SIGNUP=false`)
+* Agent stateless guard (`MEMORY_ENABLED=false`) — **no** DB writes
+* Endpoints: `/v1/chat/completions`, `/v1/models`, `/health`
+* Test script `test_phase1.py` (6 checks) – all now pass
+
+### Phase 0 — Environment & KG bug‑fix ✅ *(2025‑07‑31)*
+
+* Fixed Graphiti import path; Neo4j returns node counts > 0
+* Added Make targets: `make up`, `make logs`, `make db‑shell`
 
 ---
 
-## 6. Decisions
+## 4 · Open Questions / Potential Clashes
 
-1. **Retention** – keep messages 30 days, then auto‑purge.
-2. **Graph schema** – initial minimal schema (Page, Heading, Entity) is acceptable; existing ingest schema may override as needed.
-3. **Python version lock** – 3.10.
-4. **Secrets** – migrate Neo4j & OpenAI credentials to **Docker secrets** in Phase 3.
-5. **Licensing** – no current restrictions; use well‑supported open‑source libraries and prompt human review before adopting new paid services.
+| Topic                              | Observation                                                                           | Action                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **Phase numbering**                | Master Plan uses 0‑5; some docs label streaming as *Phase 3.2* vs original *Phase 2*. | **Keep table above as source of truth** (0‑5 linear). |
+| **`open-webui`**\*\* image tag\*\* | Compose tracks `latest` (v0.7 series).                                                | Decision: stay on `latest`; pin if CI breaks.         |
+| **Streaming latency target**       | Browser p95 ≈ 1.4 s                                                                   | **Target < 2 s** (tests enforce)                      |
+
+---
+
+## 5 · Next Steps After Phase 5
+
+1. **Phase 6 — Multi‑Agent Orchestrator**
+
+   * graduate MCP containers (Brave, Crawl4AI) from `profiles:extra` to default
+   * adopt LangGraph or CrewAI for role‑based routing (researcher/planner/executor)
+2. **Phase 7 — Memory On**
+
+   * flip `MEMORY_ENABLED=true`, implement session save & recall
+   * add privacy‑driven retention purge (30 d cron)
+3. **Phase 8 — Cloud Remote Option**
+
+   * optional AWS‑Fargate deployment with SSM tunnelling; CI publishes `arm64`/`amd64` images
+
+---
+
+## 6 · Command Reference (cheat‑sheet)
+
+```bash
+# bring up default stack (core + database UI)
+make up
+# minimal core (fast)
+make up‑minimal
+# everything including MCPs etc.
+make up‑full
+# validate full health & tests
+python tests/test_master_validation.py
+# run Phase‑5 suite only
+pytest tests/test_api_streaming.py -v
+```
+
+---
+
+## 7 · Glossary
+
+| Term        | Definition                                                  |
+| ----------- | ----------------------------------------------------------- |
+| **MCP**     | *Model Context Protocol* micro‑service (e.g., Brave Search) |
+| **SSE**     | Server‑Sent Events (token streaming)                        |
+| **Profile** | Docker Compose grouping to toggle service sets              |
+
+---
+
+*Document version 6 generated 2025‑08‑06.*
