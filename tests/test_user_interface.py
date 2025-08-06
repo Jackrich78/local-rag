@@ -175,8 +175,9 @@ def main():
     print("3. Ensure OpenWebUI is configured with our settings")
     print()
     
-    # Wait a moment for user to confirm
-    input("Press Enter when services are ready...")
+    # Auto-proceed without input for automation
+    print("Starting tests automatically...")
+    time.sleep(1)
     
     results = tester.run_all_tests()
     

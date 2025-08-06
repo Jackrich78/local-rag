@@ -11,8 +11,13 @@ import time
 import sys
 from typing import Dict, Any
 
-BASE_URL = "http://localhost:8009"
-OPENWEBUI_URL = "http://localhost:8002"
+# Import test configuration
+from test_config import TestConfig
+
+# Use configurable URLs
+config = TestConfig()
+BASE_URL = config.base_url
+OPENWEBUI_URL = config.openwebui_url
 
 def run_curl(url: str, method: str = "GET", data: str = None, timeout: int = 10) -> tuple[int, str]:
     """Run curl command and return status code and response"""
@@ -46,8 +51,9 @@ def test_models_endpoint() -> bool:
         print(f"❌ Models endpoint failed: HTTP {status_code}")
         return False
     
-    if "gpt-4o-mini" not in response:
-        print(f"❌ gpt-4o-mini not found in models response")
+    primary_model = config.primary_model
+    if primary_model not in response:
+        print(f"❌ {primary_model} not found in models response")
         return False
     
     print("✅ Models endpoint working")
@@ -55,7 +61,8 @@ def test_models_endpoint() -> bool:
 
 def test_chat_completions() -> bool:
     """Test POST /v1/chat/completions endpoint."""
-    payload = '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "ping"}], "stream": false}'
+    test_payload = config.create_chat_payload("ping", stream=False)
+    payload = json.dumps(test_payload)
     
     status_code, response = run_curl(f"{BASE_URL}/v1/chat/completions", "POST", payload, 30)
     
@@ -109,7 +116,8 @@ def test_database_writes() -> bool:
         initial_count = int(result.stdout.strip())
         
         # Make a chat request
-        payload = '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "test stateless"}], "stream": false}'
+        test_payload = config.create_chat_payload("test stateless", stream=False)
+        payload = json.dumps(test_payload)
         status_code, response = run_curl(f"{BASE_URL}/v1/chat/completions", "POST", payload, 30)
         
         if status_code != 200:
@@ -207,15 +215,8 @@ def test_all_expected_containers_running() -> bool:
                 name, status = line.split('\t', 1)
                 containers[name] = status
         
-        # Expected core containers (actual names)
-        expected_containers = [
-            "agentic-rag-agent",
-            "open-webui", 
-            "supabase-db",
-            "local-ai-packaged-neo4j-1",
-            "qdrant",
-            "caddy"
-        ]
+        # Expected core containers (from configuration)
+        expected_containers = config.get_expected_containers()
         
         missing_containers = []
         unhealthy_containers = []

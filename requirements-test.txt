@@ -1,0 +1,14 @@
+# Test Dependencies for Local RAG System
+# Install with: python3 -m pip install --break-system-packages -r requirements-test.txt
+
+# Core HTTP client libraries for test suites
+aiohttp>=3.8.0          # Async HTTP client for API streaming tests
+requests>=2.28.0        # Synchronous HTTP client for basic API tests
+
+# Optional: JSON processing (usually included with Python)
+# jq equivalent for command-line testing (install separately: brew install jq)
+
+# Development dependencies (optional)
+# pytest>=7.0.0         # If migrating to pytest framework
+# black>=22.0.0         # Code formatting
+# flake8>=4.0.0         # Linting
