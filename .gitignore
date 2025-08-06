@@ -16,3 +16,7 @@ secrets/
 .claude
 secrets
 PLANNING_BACKUP
+
+# Test reports and artifacts
+tests/reports/
+tests/__pycache__/
