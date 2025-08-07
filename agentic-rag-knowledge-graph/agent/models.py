@@ -250,3 +250,56 @@ class HealthStatus(BaseModel):
     llm_connection: bool
     version: str
     timestamp: datetime
+
+
+# OpenAI-compatible Models
+class OpenAIMessage(BaseModel):
+    """OpenAI chat message format."""
+    role: Literal["system", "user", "assistant"]
+    content: str
+    name: Optional[str] = None
+
+
+class OpenAIChatRequest(BaseModel):
+    """OpenAI chat completion request format."""
+    model: str
+    messages: List[OpenAIMessage]
+    stream: bool = False
+    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(default=None, ge=1)
+    top_p: Optional[float] = Field(default=1.0, ge=0.0, le=1.0)
+    frequency_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
+    presence_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
+    user: Optional[str] = None
+
+
+class OpenAIDelta(BaseModel):
+    """OpenAI streaming delta."""
+    content: Optional[str] = None
+    role: Optional[str] = None
+
+
+class OpenAIChoice(BaseModel):
+    """OpenAI choice in response."""
+    index: int
+    message: Optional[OpenAIMessage] = None
+    delta: Optional[OpenAIDelta] = None
+    finish_reason: Optional[Literal["stop", "length", "content_filter", "tool_calls"]] = None
+
+
+class OpenAIUsage(BaseModel):
+    """OpenAI usage statistics."""
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class OpenAIChatResponse(BaseModel):
+    """OpenAI chat completion response format."""
+    id: str
+    object: Literal["chat.completion", "chat.completion.chunk"]
+    created: int
+    model: str
+    choices: List[OpenAIChoice]
+    usage: Optional[OpenAIUsage] = None
+    system_fingerprint: Optional[str] = None

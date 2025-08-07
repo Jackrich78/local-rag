@@ -295,6 +295,94 @@ This document tracks all tasks for building the agentic RAG system with knowledg
 
 ---
 
+## Phase 3.1: Docker Integration & Production Stabilization
+
+### Database Schema Integration
+- [ ] Copy agent's `schema.sql` to Supabase init directory: `local-ai-packaged/supabase/docker/volumes/db/`
+- [ ] Rename to `01-agent-schema.sql` to ensure proper load order
+- [ ] Update Supabase docker-compose to mount agent schema as init script
+- [ ] Test schema initialization by checking for `documents`, `chunks`, `sessions`, `messages` tables
+- [ ] Verify vector search functions (`match_chunks`, `hybrid_search`) are created
+- [ ] Test agent database connection after schema initialization
+
+### Service Dependencies & Health Checks
+- [ ] Update agent service `depends_on` to include `db: condition: service_healthy`
+- [ ] Test agent startup waits for Supabase db to be healthy
+- [ ] Verify agent health check endpoint responds correctly after startup
+- [ ] Test cascading health checks through Caddy proxy
+- [ ] Verify all localhost URLs load correctly (8005, 8008, 8009)
+
+### CLI Package Configuration
+- [ ] Create `pyproject.toml` in `agentic-rag-knowledge-graph/` directory
+- [ ] Configure `[project.scripts]` section with `agent-cli = "agent.cli:main"`
+- [ ] Move `cli.py` to `agent/cli.py` within package structure
+- [ ] Update imports in moved cli.py file
+- [ ] Test CLI installation works in container
+- [ ] Test `agent-cli` command executes from any directory
+- [ ] Verify CLI can connect to containerized agent API
+
+### OpenWebUI-Agent Integration
+- [ ] Research OpenWebUI environment variables for custom API backends
+- [ ] Configure OpenWebUI service to use agent as backend API
+- [ ] Set OpenWebUI environment: `OPENAI_API_BASE_URL=http://agent:8058`
+- [ ] Configure OpenWebUI to disable default OpenAI integration
+- [ ] Test chat interface connects to agent
+- [ ] Verify sessions persist in Supabase database
+- [ ] Test conversation history retrieval through OpenWebUI
+
+### Document Ingestion Automation
+- [ ] Create agent-init container service in docker-compose
+- [ ] Configure init container to run ingestion after agent starts
+- [ ] Add command: `python -m ingestion.ingest --documents big_tech_docs --clean`
+- [ ] Set proper depends_on: agent service healthy
+- [ ] Test automatic ingestion runs on startup
+- [ ] Verify documents appear in Supabase database
+- [ ] Test search functionality works with ingested documents
+
+### Makefile & Testing Updates
+- [ ] Update `make test` target to check database schema exists
+- [ ] Add verification that documents are ingested (count > 0)
+- [ ] Add CLI command test: `agent-cli "test question"`
+- [ ] Add health check verification for all services
+- [ ] Add OpenWebUI connectivity test
+- [ ] Update `make status` to show ingestion completion
+- [ ] Add `make seed` target for manual re-ingestion
+
+### Root-Level Compose Migration (Phase 3.1 Requirement)
+- [ ] Copy `local-ai-packaged/docker-compose.yml` to root as `docker-compose.yaml`
+- [ ] Update all relative paths to reference `./local-ai-packaged/` subdirectory
+- [ ] Update Makefile to use root-level compose file
+- [ ] Test `make up` works from project root
+- [ ] Verify all services start correctly with new structure
+- [ ] Update documentation to reflect new structure
+
+### Environment & Secrets Validation
+- [ ] Verify all required environment variables are set in `.env`
+- [ ] Test OpenAI API key is correctly passed to agent
+- [ ] Test Neo4j authentication works
+- [ ] Verify Supabase credentials are functional
+- [ ] Test agent can access both databases successfully
+
+### Integration Testing Infrastructure
+- [ ] Create `test_integration.py` for full stack testing
+- [ ] Test: All services start healthy within 60 seconds
+- [ ] Test: Agent API responds to health checks
+- [ ] Test: Database schema is properly initialized
+- [ ] Test: Document ingestion completes successfully
+- [ ] Test: CLI can execute queries and get responses
+- [ ] Test: OpenWebUI can connect and chat with agent
+- [ ] Test: Sessions persist between container restarts
+
+### Documentation Updates
+- [ ] Update `SOP-DAILY-OPERATIONS.md` with corrected localhost URLs
+- [ ] Add OpenWebUI usage instructions
+- [ ] Update CLI installation and usage instructions
+- [ ] Document new docker-compose structure
+- [ ] Add troubleshooting guide for common startup issues
+- [ ] Update `PLANNING.md` with Phase 3.1 completion status
+
+---
+
 ## Project Status
 
 ✅ **All core functionality completed and tested**

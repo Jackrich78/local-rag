@@ -13,3 +13,11 @@ secrets/
 .vscode
 .DS_Store
 * -bak/
+.claude
+secrets
+PLANNING_BACKUP
+
+# Test reports and artifacts
+tests/reports/
+tests/__pycache__/
+docs/archive/
